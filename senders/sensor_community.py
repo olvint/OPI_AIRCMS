@@ -15,7 +15,7 @@ BOARD_ID = "raspi-5006471"
 API_URL_SENSOR = "https://api.sensor.community/v1/push-sensor-data/"
 API_URL_MADAVI = "https://api-rrd.madavi.de/data.php"
 TIMEOUT = 10
-SEND_INTERVAL = 180  # 3 минуты - оптимально для карт [attached_file:1]
+SEND_INTERVAL = 180  # 3 минуты - оптимально для карт 
 
 # Настройка логирования
 logging.basicConfig(
