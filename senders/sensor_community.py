@@ -29,7 +29,7 @@ def send_sensor_data(url: str, headers: Dict, data: Dict) -> bool:
     """Отправка данных в API"""
     try:
         resp = requests.post(url, json=data, headers=headers, timeout=TIMEOUT)
-        if resp.status_code == 200:
+        if resp.status_code in (200, 201) :
             logger.info(f"✓ Отправлено в {url.split('/')[2]}: {data['sensordatavalues']}")
             return True
         else:
@@ -134,7 +134,7 @@ def send_data(shared_dict: Dict, lock):
                     logger.warning(f"❌ Ошибка отправки ({consecutive_errors})")
             
             # Пауза между проверками
-            time.sleep(145)
+            time.sleep(SEND_INTERVAL)
             
         except KeyboardInterrupt:
             logger.info("🛑 Получен сигнал остановки")
