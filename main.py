@@ -1,3 +1,4 @@
+import signal
 import multiprocessing
 import time
 import random
@@ -6,10 +7,21 @@ import threading
 
 from air.sensor import get_air_sensor
 from webfront import flaskweb
-from sensor_community import sensor_community
+from senders import sensor_community
+
+def signal_handler(sig, frame):
+    print(f"\n🛑 Получен сигнал {sig}, инициируем graceful shutdown...")
+    shutdown_flag.value = True
+    sys.stdout.flush()
+
 
 def main():
     """Основная функция, запускающая процессы"""
+    
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
+
+
     # Создаем менеджер для разделяемой памяти
     with multiprocessing.Manager() as manager:
         # Создаем разделяемый словарь

@@ -104,20 +104,7 @@ def dashboard():
     pm10_str = format_value(pm10, '{:.1f} μg/m³')
     cpu_temp_str = format_value(cpu_temp, '{:.1f}°C')  # ← Форматирование температуры CPU
 
-    
-    # Определение статуса температуры CPU
-    cpu_status = ""
-    cpu_status_color = "#666"
-    if cpu_temp is not None:
-        if cpu_temp < 60:
-            cpu_status = "✅ Нормальная"
-            cpu_status_color = "#10B981"
-        elif cpu_temp < 70:
-            cpu_status = "⚠️ Повышенная"
-            cpu_status_color = "#F59E0B"
-        else:
-            cpu_status = "🔥 Высокая"
-            cpu_status_color = "#EF4444"
+
     
     # HTML шаблон с улучшениями
     html_template = """
@@ -369,14 +356,8 @@ def dashboard():
         <div class="cpu-info">
             <div class="cpu-info-left">
                 <div class="cpu-temp">
-                    🔥 Температура процессора: {{ cpu_temp_str }}
+                    Температура процессора: {{ cpu_temp_str }}
                 </div>
-                <div class="cpu-status" style="background: {{ cpu_status_color }}; color: white;">
-                    {{ cpu_status }}
-                </div>
-            </div>
-            <div class="cpu-model">
-                Orange Pi Zero | Обновлено: {{ time_str }}
             </div>
         </div>
         {% endif %}
@@ -433,8 +414,6 @@ def dashboard():
                                 pm10_str=pm10_str,
                                 cpu_temp=cpu_temp,  # ← Передаем температуру CPU
                                 cpu_temp_str=cpu_temp_str,  # ← Передаем форматированную температуру
-                                cpu_status=cpu_status,  # ← Передаем статус
-                                cpu_status_color=cpu_status_color,  # ← Передаем цвет статуса
                                 time_str=time_str,
                                 ago_str=ago_str,
                                 quality=quality,
