@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import time
 from smbus2 import SMBus
+import logging
+
 
 # Конфигурация
 bus_num = 0
@@ -29,15 +31,15 @@ class ENS160:
 
         # 1. HARDWARE RESET
         self.bus.write_byte_data(self.addr, 0x10, 0xCC)
-        time.sleep(0.02)
+        time.sleep(0.1)
 
         # 2. IDLE mode
         self.bus.write_byte_data(self.addr, 0x10, 0x01)
-        time.sleep(0.02)
+        time.sleep(0.1)
 
         # 3. CONFIG (PARTID = 0x02 for STANDARD mode)
         self.bus.write_byte_data(self.addr, 0x11, 0x02)
-        time.sleep(0.02)
+        time.sleep(0.1)
 
         # 4. STANDARD mode
         self.bus.write_byte_data(self.addr, 0x10, 0x02)
@@ -61,7 +63,19 @@ class ENS160:
             time.sleep(0.05)
 
             # Чтение статуса
-            status = self.bus.read_byte_data(self.addr, 0x20)
+            status_raw = self.bus.read_byte_data(self.addr, 0x20)
+            
+            status_list = []
+            if status_raw & 0x80:
+                status_list.append("READY")
+            if status_raw & 0x10:
+                status_lists.append("VALID")
+            if status_raw & 0x08:
+                status_list.append("WARN")
+            if status_raw & 0x01:
+                status_list.append("ERR")
+            status=  "|".join(status_list)
+
 
             # Чтение данных
             aqi = self.bus.read_byte_data(self.addr, 0x21)
@@ -72,24 +86,42 @@ class ENS160:
             eco2_data = self.bus.read_i2c_block_data(self.addr, 0x24, 2)
             eco2 = (eco2_data[1] << 8) | eco2_data[0]
 
-            return {
-                'aqi': aqi,
-                'tvoc': tvoc,
-                'eco2': eco2,
-                'status': status
-            }
+            return {'ENS160':{
+                'AQI':{
+                    'value':aqi,
+                    'unit':'',
+                    'description':'Индекс качества воздуха',
+                    'status':status,                },
+                'TVOC':{
+                    'value':tvoc,
+                    'unit':'мкг/м³',
+                    'description':'Концентрация летучих органических соединений',
+                    'status':status,
+                },
+                'eCO2':{
+                    'value':eco2,
+                    'unit':'ppm',
+                    'description':'Содержание CO₂',
+                    'status':status,                 
+                }
+              }
+            }    
+
 
         except Exception as e:
             print(f"❌ Ошибка чтения ENS160: {e}")
+            logger.ERROR(f"❌ Ошибка чтения ENS160: {e}")
             return None
 
     def close(self):
         if self.bus:
             try:
                 self.bus.close()
-                print("🔌 Шина I2C закрыта")
+
             except Exception as e:
                 print(f"⚠️ Ошибка при закрытии шины: {e}")
+                logger.ERROR(f"⚠️ Ошибка при закрытии шины: {e}")
+
 
     def __del__(self):
         self.close()
@@ -97,20 +129,13 @@ class ENS160:
 
 def main():
     sensor = ENS160()
-    try:
-        while True:
-            # Пример: передаём температуру и влажность
-            data = sensor.get_data(temperature=26.5, humidity=30.0)
-            if data:
-                print(
-                    f"AQI:{data['aqi']} TVOC:{data['tvoc']}ppb eCO2:{data['eco2']}ppm status:0x{data['status']:02X}"
-                )
-            else:
-                print("⚠️ Ошибка получения данных")
-            time.sleep(2)
-    except KeyboardInterrupt:
-        print("\n🛑 Остановлено пользователем")
 
+    while True:
+        # Пример: передаём температуру и влажность
+        data = sensor.get_data(temperature=26.5, humidity=30.0)
+        
+        print(data)
+        time.sleep(2)
 
 if __name__ == "__main__":
     main()

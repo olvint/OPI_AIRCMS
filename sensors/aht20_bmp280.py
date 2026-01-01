@@ -11,7 +11,7 @@ aht20_addr = 0x38
 logging.basicConfig(level=logging.INFO)
 
 class AHT20_BMP280:
-    def __init__(self, bus_num=0, bmp280_addr=0x76, aht20_addr=0x38):
+    def __init__(self):
         self.bus_num = bus_num
         self.bmp280_addr = bmp280_addr
         self.aht20_addr = aht20_addr
@@ -159,12 +159,36 @@ class AHT20_BMP280:
     def get_data(self):
         temp_a, hum_a = self.read_aht20()
         temp_b, press_b = self.read_bmp280()
+
         return {
-            'aht20_temperature': temp_a,
-            'aht20_humidity': hum_a,
-            'bmp280_temperature': temp_b,
-            'bmp280_pressure': press_b
+            'AHT20':{
+                'Temperature':{
+                    'value':round(temp_a,2),
+                    'unit':'°C',
+                    'description':'Температура',
+
+                },
+                'Humidity':{
+                    'value':round(hum_a,2),
+                    'unit':'%',
+                    'description':'Влажность',
+
+                },
+            },   
+            'BMP280':{
+                'Temperature':{
+                    'value':round(temp_b,2),
+                    'unit':'°C',
+                    'description':'Температура',
+                },
+                'Pressure':{
+                    'value':round(press_b,2),
+                    'unit':'гПа',
+                    'description':'Давление',
+                },
+            },    
         }
+
 
     def close(self):
         if self.bus:
@@ -179,7 +203,7 @@ class AHT20_BMP280:
 
 
 def main():
-    sensor = AHT20_BMP280(bus_num=bus_num, bmp280_addr=bmp280_addr, aht20_addr=aht20_addr)
+    sensor = AHT20_BMP280()
     while True:
         data = sensor.get_data()
         print(data)

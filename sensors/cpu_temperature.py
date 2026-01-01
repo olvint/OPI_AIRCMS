@@ -2,6 +2,7 @@
 import os
 import logging
 from typing import Optional
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,14 @@ class CPUTemperature:
                     
                     # Проверка на разумные значения (обычно 0-100°C для процессора)
                     if 0 <= temp_c <= 100:
-                        return round(temp_c, 1)
+                        return {'CPU_Temperature':{
+                            'value':round(temp_c, 1),
+                            'unit':'°C',
+                            'description':'Температура процессора',
+                            
+                            }
+                        }
+                        
                     else:
                         logger.warning(f"CPU temp out of range: {temp_c}°C")
                         return None
@@ -37,3 +45,13 @@ class CPUTemperature:
         except Exception as e:
             logger.error(f"CPU temp ошибка: {e}")
             return None
+
+def main():
+    sensor = CPUTemperature()
+    while True:
+        data = sensor.get_data()
+        print(data)
+        time.sleep(2)
+
+if __name__ == "__main__":
+    main()

@@ -3,6 +3,7 @@ import serial
 import struct
 import logging
 from typing import Optional, Tuple
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -33,9 +34,31 @@ class SDS011:
                     pm25 = struct.unpack('<H', data[2:4])[0] / 10.0
                     pm10 = struct.unpack('<H', data[4:6])[0] / 10.0
                     
-                    return round(pm25, 1), round(pm10, 1)
+                    return {'SDS011':{
+                                        'pm25':{
+                                            'value':round(pm25,2),
+                                            'unit':'мкг/м³',
+                                            'description':'PM 2.5',
+                                        },
+                                        'pm10':{
+                                            'value':round(pm10,2),
+                                            'unit':'мкг/м³',
+                                            'description':'PM 10',
+                                        }}
+                    }
                     
         except Exception as e:
+            print(f"SDS011 ошибка: {e}")
             logger.error(f"SDS011 ошибка: {e}")
         
-        return None, None
+        return None
+
+def main():
+    sensor = SDS011()
+    while True:
+        data = sensor.get_data()
+        print(data)
+        time.sleep(2)
+
+if __name__ == "__main__":
+    main()
