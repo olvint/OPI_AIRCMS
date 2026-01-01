@@ -45,10 +45,8 @@ def main():
         
         # Создаем и запускаем процессы
         processes = [
-            # multiprocessing.Process(target=get_air_sensor, args=(shared_dict, lock)),
             multiprocessing.Process(target=get_sensors_data, args=(shared_dict, lock)),
             multiprocessing.Process(target=sensor_community.send_data, args=(shared_dict, lock)),
-
         ]
         
         try:

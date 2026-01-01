@@ -5,7 +5,7 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-class CPUTemperatureSensor:
+class CPUTemperature:
     """Класс для получения температуры процессора"""
     
     def __init__(self, temp_path: str = '/sys/class/thermal/thermal_zone0/temp'):

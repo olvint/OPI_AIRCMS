@@ -6,7 +6,7 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-class SDS011Sensor:
+class SDS011:
     """Класс для работы с датчиком пыли SDS011"""
     
     def __init__(self, port: str = '/dev/ttyS1', baudrate: int = 9600):

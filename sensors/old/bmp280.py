@@ -10,7 +10,7 @@ class BMP280Sensor:
     """Класс для работы с BMP280 (температура и давление)"""
     
     # Константы
-    BMP_ADDR = 0x76
+    BMP_ADDR = 0x77
     REG_ID = 0xD0
     REG_CTRL_MEAS = 0xF4
     REG_CONFIG = 0xF5
@@ -37,7 +37,7 @@ class BMP280Sensor:
     def _initialize(self):
         """Инициализация датчика BMP280"""
         try:
-            self.bus = smbus2.SMBus(0)
+            self.bus = smbus2.SMBus(1)
             chip_id = self.bus.read_byte_data(self.BMP_ADDR, self.REG_ID)
             
             if chip_id != 0x58:
@@ -164,3 +164,32 @@ class BMP280Sensor:
         """Закрытие ресурсов"""
         if self.bus:
             self.bus.close()
+
+    def __del__(self):
+        self.close()        
+
+if __name__ == "__main__":
+    # Настройка логирования для теста
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    
+    sensor = None
+    try:
+        sensor = BMP280Sensor()
+        print("✅ BMP280 запущен. Нажмите Ctrl+C для остановки.\n")
+        
+        while True:
+            temp, press = sensor.get_data()
+            if temp is not None and press is not None:
+                print(f"🌡️ Температура: {temp:.2f} °C  |  📉 Давление: {press:.2f} гПа")
+            else:
+                print("⚠️ Ошибка чтения данных с BMP280")
+            time.sleep(2)
+            
+    except KeyboardInterrupt:
+        print("\n🛑 Остановка по запросу пользователя...")
+    except Exception as e:
+        print(f"❌ Критическая ошибка: {e}")
+    finally:
+        if sensor:
+            sensor.close()
+        print("🔌 BMP280 закрыт.")

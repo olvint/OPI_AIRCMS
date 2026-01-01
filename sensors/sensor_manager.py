@@ -5,9 +5,11 @@ from typing import Dict, Any
 import multiprocessing
 
 # Импортируем классы сенсоров
-from sensors.bmp280_sensor import BMP280Sensor
-from sensors.sds011_sensor import SDS011Sensor
-from sensors.cpu_temperature_sensor import CPUTemperatureSensor
+
+from sensors.aht20_bmp280 import AHT20_BMP280
+from ensors.ens160 import ENS160
+from sensors.sds011 import SDS011
+from sensors.cpu_temperature import CPUTemperature
 
 # Настройка логирования только для ошибок
 logging.basicConfig(
