@@ -543,10 +543,12 @@ HTML_TEMPLATE = '''
                                         </div>
                                         <div class="param-timestamp">
                                             <i class="far fa-clock"></i>
-                                            <span>{{ param_data.timestamp|datetime_format_short }}</span>
-                                            <span class="time-ago" data-timestamp="{{ param_data.timestamp }}">
-                                                <!-- Заполнится JavaScript -->
-                                            </span>
+                                            <span>{{ param_data.timestamp|datetime_format_short if param_data.timestamp else '' }}</span>
+                                            {% if param_data.timestamp %}
+                                                <span class="time-ago" data-timestamp="{{ param_data.timestamp }}">
+                                                    <!-- Заполнится JavaScript -->
+                                                </span>
+                                            {% endif %}
                                         </div>
                                         {% if param_data.status %}
                                             <div class="param-status">
@@ -594,10 +596,12 @@ HTML_TEMPLATE = '''
                             
                             <div class="service-timestamp">
                                 <i class="far fa-calendar-alt"></i>
-                                <span>{{ service_data.timestamp|datetime_format }}</span>
-                                <span class="time-ago" data-timestamp="{{ service_data.timestamp }}">
-                                    <!-- Заполнится JavaScript -->
-                                </span>
+                                <span>{{ service_data.timestamp|datetime_format if service_data.timestamp else '' }}</span>
+                                {% if service_data.timestamp %}
+                                    <span class="time-ago" data-timestamp="{{ service_data.timestamp }}">
+                                        <!-- Заполнится JavaScript -->
+                                    </span>
+                                {% endif %}
                             </div>
                         </div>
                     {% endfor %}
@@ -624,26 +628,14 @@ HTML_TEMPLATE = '''
     </div>
     
     <script>
-        // Форматирование времени
-        function formatDateTime(timestamp) {
-            if (!timestamp) return 'неизвестно';
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleString('ru-RU');
-        }
-        
-        // Форматирование времени коротко
-        function formatDateTimeShort(timestamp) {
-            if (!timestamp) return '';
-            const date = new Date(timestamp * 1000);
-            return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-        }
-        
         // Расчет времени назад с округлением до целого
         function timeAgo(timestamp) {
-            if (!timestamp) return '';
-            const now = Math.floor(Date.now() / 1000);
-            const diff = Math.round(now - timestamp); // Округляем до целого
+            if (!timestamp || isNaN(timestamp)) return '';
             
+            const now = Math.floor(Date.now() / 1000); // Текущее время в секундах
+            const diff = Math.round(now - timestamp); // Разница в секундах
+            
+            if (diff < 0) return 'только что'; // Если timestamp в будущем
             if (diff < 60) return `${diff} сек. назад`;
             if (diff < 3600) return `${Math.floor(diff / 60)} мин. назад`;
             if (diff < 86400) return `${Math.floor(diff / 3600)} час. назад`;
@@ -654,8 +646,10 @@ HTML_TEMPLATE = '''
         function updateTimeAgo() {
             document.querySelectorAll('.time-ago').forEach(el => {
                 const timestamp = parseFloat(el.getAttribute('data-timestamp'));
-                if (timestamp) {
+                if (!isNaN(timestamp) && timestamp > 0) {
                     el.textContent = timeAgo(timestamp);
+                } else {
+                    el.textContent = '';
                 }
             });
         }
@@ -665,14 +659,16 @@ HTML_TEMPLATE = '''
             // Находим все timestamps на странице
             const timestamps = Array.from(document.querySelectorAll('.time-ago'))
                 .map(el => parseFloat(el.getAttribute('data-timestamp')))
-                .filter(ts => ts && !isNaN(ts));
+                .filter(ts => ts && !isNaN(ts) && ts > 0);
             
             if (timestamps.length > 0) {
                 // Берем самый свежий timestamp
                 const latestTimestamp = Math.max(...timestamps);
                 const lastDataElement = document.getElementById('lastDataTime');
                 if (lastDataElement) {
-                    lastDataElement.textContent = formatDateTime(latestTimestamp);
+                    // Форматируем дату из timestamp
+                    const date = new Date(latestTimestamp * 1000);
+                    lastDataElement.textContent = date.toLocaleString('ru-RU');
                 }
             }
         }
@@ -839,7 +835,7 @@ class FlaskSensorApp:
                     return dt.strftime('%d.%m.%Y %H:%M:%S')
             except:
                 pass
-            return str(timestamp)
+            return ''
         
         @self.app.template_filter('datetime_format_short')
         def datetime_format_short(timestamp):
@@ -1092,5 +1088,4 @@ def start_flask_in_thread(shared_dict, lock, host='0.0.0.0', port=5000):
     flask_thread.start()
     
     # Ждем немного чтобы сервер успел запуститься
-    import time
     time.sleep(1)

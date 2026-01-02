@@ -168,12 +168,13 @@ class AHT20_BMP280:
                     'value':round(temp_a,2),
                     'unit':'°C',
                     'description':'Температура',
-
+                    'timestamp':time.time(),
                 },
                 'Humidity':{
                     'value':round(hum_a,2),
                     'unit':'%',
                     'description':'Влажность',
+                    'timestamp':time.time(),
 
                 },
             },   
@@ -182,11 +183,13 @@ class AHT20_BMP280:
                     'value':round(temp_b,2),
                     'unit':'°C',
                     'description':'Температура',
+                    'timestamp':time.time(),
                 },
                 'Pressure':{
                     'value':round(press_b,2),
                     'unit':'гПа',
                     'description':'Давление',
+                    'timestamp':time.time(),
                 },
             },    
         }
@@ -218,6 +221,9 @@ def start_process(shared_dict, lock):
 
                 update_sensor_data(shared_dict, lock, data)
                 update_service_status(shared_dict, lock, process_name,'ОК')
+            time.sleep(5) 
+        
+               
             
     except KeyboardInterrupt:
         print(f"Процесс {process_name} остановлен")
