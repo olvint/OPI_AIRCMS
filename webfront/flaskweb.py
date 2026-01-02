@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask веб-интерфейс для отображения данных с датчиков
-Обновленная версия с новым форматом данных
+Обновленная версия с использованием timestamp из данных датчиков
 """
 
 import json
@@ -485,7 +485,7 @@ HTML_TEMPLATE = '''
                 <p class="header-subtitle">Реальное время • Все датчики онлайн • Автообновление</p>
                 <div class="system-status">
                     <div class="status-indicator"></div>
-                    <span>Система активна • Обновлено: <span id="lastUpdateTime">{{ current_time|datetime_format }}</span></span>
+                    <span>Система активна • Последние данные: <span id="lastDataTime">{{ latest_timestamp|datetime_format if latest_timestamp else 'загружаются...' }}</span></span>
                 </div>
                 <div class="refresh-timer">
                     <div class="timer-bar" id="timerBar"></div>
@@ -650,7 +650,7 @@ HTML_TEMPLATE = '''
             return `${Math.floor(diff / 86400)} дн. назад`;
         }
         
-        // Обновление времени "X сек. назад"
+        // Обновление времени "X сек. назад" для всех элементов
         function updateTimeAgo() {
             document.querySelectorAll('.time-ago').forEach(el => {
                 const timestamp = parseFloat(el.getAttribute('data-timestamp'));
@@ -660,12 +660,20 @@ HTML_TEMPLATE = '''
             });
         }
         
-        // Обновление времени в шапке
+        // Обновление времени в шапке (берем самый свежий timestamp)
         function updateHeaderTime() {
-            const now = Math.floor(Date.now() / 1000);
-            const lastUpdateElement = document.getElementById('lastUpdateTime');
-            if (lastUpdateElement) {
-                lastUpdateElement.textContent = formatDateTime(now);
+            // Находим все timestamps на странице
+            const timestamps = Array.from(document.querySelectorAll('.time-ago'))
+                .map(el => parseFloat(el.getAttribute('data-timestamp')))
+                .filter(ts => ts && !isNaN(ts));
+            
+            if (timestamps.length > 0) {
+                // Берем самый свежий timestamp
+                const latestTimestamp = Math.max(...timestamps);
+                const lastDataElement = document.getElementById('lastDataTime');
+                if (lastDataElement) {
+                    lastDataElement.textContent = formatDateTime(latestTimestamp);
+                }
             }
         }
         
@@ -775,12 +783,16 @@ HTML_TEMPLATE = '''
         
         // Инициализация
         document.addEventListener('DOMContentLoaded', function() {
+            // Сразу обновляем время "X сек. назад"
             updateTimeAgo();
             updateHeaderTime();
             updateTimer();
             
-            // Автообновление времени "X сек. назад"
-            setInterval(updateTimeAgo, 1000);
+            // Автообновление времени "X сек. назад" каждую секунду
+            setInterval(() => {
+                updateTimeAgo();
+                updateHeaderTime();
+            }, 1000);
             
             // Автообновление страницы каждые 60 секунд
             setTimeout(() => {
@@ -859,14 +871,66 @@ class FlaskSensorApp:
             sensor_data = data.get('Sensor data', {})
             service_data = data.get('Service data', {})
             
-            # Добавляем текущее время для отображения
-            current_time = time.time()
+            # Находим самый свежий timestamp из всех данных
+            latest_timestamp = 0
+            
+            # Фильтруем sensor_data - только валидные словари
+            filtered_sensor_data = {}
+            if isinstance(sensor_data, dict):
+                for sensor_name, sensor_values in sensor_data.items():
+                    # Проверяем что sensor_values это словарь
+                    if isinstance(sensor_values, dict):
+                        filtered_params = {}
+                        for param_name, param_data in sensor_values.items():
+                            # Проверяем что param_data это словарь
+                            if isinstance(param_data, dict):
+                                filtered_params[param_name] = param_data
+                                
+                                # Обновляем latest_timestamp
+                                if 'timestamp' in param_data:
+                                    ts = param_data['timestamp']
+                                    if isinstance(ts, (int, float)):
+                                        latest_timestamp = max(latest_timestamp, ts)
+                            else:
+                                # Если param_data не словарь, логируем и пропускаем
+                                print(f"⚠️  {sensor_name}.{param_name}: пропущен (не словарь: {type(param_data)})")
+                        
+                        if filtered_params:  # Добавляем только если есть параметры
+                            filtered_sensor_data[sensor_name] = filtered_params
+                    else:
+                        # Если sensor_values не словарь, логируем
+                        print(f"⚠️  {sensor_name}: пропущен (не словарь: {type(sensor_values)})")
+            else:
+                print(f"⚠️  Sensor data не словарь: {type(sensor_data)}")
+            
+            # Фильтруем service_data
+            filtered_service_data = {}
+            if isinstance(service_data, dict):
+                for service_name, service_values in service_data.items():
+                    if isinstance(service_values, dict):
+                        filtered_service_data[service_name] = service_values
+                        if 'timestamp' in service_values:
+                            ts = service_values['timestamp']
+                            if isinstance(ts, (int, float)):
+                                latest_timestamp = max(latest_timestamp, ts)
+                    else:
+                        # Если service_values не словарь, преобразуем
+                        filtered_service_data[service_name] = {
+                            'message': str(service_values),
+                            'timestamp': time.time()
+                        }
+            else:
+                print(f"⚠️  Service data не словарь: {type(service_data)}")
+            
+            # Если нет timestamp, используем текущее время
+            if latest_timestamp == 0:
+                latest_timestamp = time.time()
             
             return render_template_string(
                 HTML_TEMPLATE,
-                sensor_data_dict=sensor_data,
-                service_data_dict=service_data,
-                current_time=current_time
+                sensor_data_dict=filtered_sensor_data,
+                service_data_dict=filtered_service_data,
+                latest_timestamp=latest_timestamp
             )
         
         @self.app.route('/api')
@@ -879,28 +943,6 @@ class FlaskSensorApp:
                 data = dict(self.shared_dict)
             
             return jsonify(data)
-        
-        @self.app.route('/api/timestamp')
-        def api_timestamp():
-            """API для получения timestamp"""
-            if not self.shared_dict:
-                return jsonify({'timestamp': None}), 503
-            
-            with self.lock:
-                data = dict(self.shared_dict)
-            
-            # Получаем самый свежий timestamp из данных
-            latest_timestamp = 0
-            for sensor_data in data.get('Sensor data', {}).values():
-                for param_data in sensor_data.values():
-                    if 'timestamp' in param_data:
-                        latest_timestamp = max(latest_timestamp, param_data.get('timestamp', 0))
-            
-            for service_data in data.get('Service data', {}).values():
-                if 'timestamp' in service_data:
-                    latest_timestamp = max(latest_timestamp, service_data.get('timestamp', 0))
-            
-            return jsonify({'timestamp': latest_timestamp or time.time()})
         
         @self.app.route('/api/health')
         def api_health():
@@ -915,13 +957,18 @@ class FlaskSensorApp:
             now = time.time()
             max_age = 0
             
-            for sensor_data in data.get('Sensor data', {}).values():
-                for param_data in sensor_data.values():
-                    if 'timestamp' in param_data:
-                        age = now - param_data.get('timestamp', 0)
-                        max_age = max(max_age, age)
+            sensor_data = data.get('Sensor data', {})
+            if isinstance(sensor_data, dict):
+                for sensor_values in sensor_data.values():
+                    if isinstance(sensor_values, dict):
+                        for param_data in sensor_values.values():
+                            if isinstance(param_data, dict) and 'timestamp' in param_data:
+                                ts = param_data.get('timestamp', 0)
+                                if isinstance(ts, (int, float)):
+                                    age = now - ts
+                                    max_age = max(max_age, age)
             
-            has_data = bool(data.get('Sensor data', {}))
+            has_data = bool(sensor_data)
             is_fresh = max_age < 30  # Данные не старше 30 секунд
             
             return jsonify({
@@ -1047,5 +1094,3 @@ def start_flask_in_thread(shared_dict, lock, host='0.0.0.0', port=5000):
     # Ждем немного чтобы сервер успел запуститься
     import time
     time.sleep(1)
-    
-    return flask_thread
