@@ -2,3 +2,4 @@ bin/
 lib/
 test/
 airsensor.log
+**/__pycache__/
