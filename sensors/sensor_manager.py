@@ -34,7 +34,7 @@ class Sensors:
     """Основной класс для работы со всеми датчиками"""
     def __init__(self):
         # Создаем экземпляры сенсоров
-        self.aht20_bmp280 = AHT20_BMP280()
+        # self.aht20_bmp280 = AHT20_BMP280()
         self.ens160 = ENS160()
         self.sds011 = SDS011()
         self.cpu_temp = CPUTemperature()
@@ -48,10 +48,10 @@ class Sensors:
             'Service data': {}
         }
         
-        # 1. Читаем AHT20+BMP280
-        aht_data = self.aht20_bmp280.get_data()
-        if aht_data:
-            data['Sensor data'].update(aht_data)
+        # # 1. Читаем AHT20+BMP280
+        # aht_data = self.aht20_bmp280.get_data()
+        # if aht_data:
+        #     data['Sensor data'].update(aht_data)
         
         # 2. Читаем SDS011
         sds_data = self.sds011.get_data()
@@ -59,17 +59,21 @@ class Sensors:
             data['Sensor data'].update(sds_data)
         
         # 3. Читаем ENS160 (с проверкой наличия данных AHT20)
-        temperature = None
-        humidity = None
+        temperature = 4
+        humidity = 40
         
         if 'AHT20' in data['Sensor data']:
             temp_obj = data['Sensor data']['AHT20'].get('Temperature')
             hum_obj = data['Sensor data']['AHT20'].get('Humidity')
             
             if temp_obj:
-                temperature = temp_obj.get('value')    
+                temperature = temp_obj.get('value') 
+            else:
+                temperature=3       
             if hum_obj:
                 humidity = hum_obj.get('value')
+            else:
+                humidity=50
         
         ens_data = self.ens160.get_data(temperature=temperature, humidity=humidity)
         if ens_data:
@@ -87,7 +91,7 @@ class Sensors:
 
     def close(self):
         """Закрытие ресурсов"""
-        self.aht20_bmp280.close()
+        # self.aht20_bmp280.close()
         self.ens160.close()
 
     def __del__(self):

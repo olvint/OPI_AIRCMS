@@ -2,6 +2,7 @@
 import time
 from smbus2 import SMBus
 import logging
+from update_shared_dict import update_sensor_data, update_service_status
 
 
 # Конфигурация
@@ -47,7 +48,7 @@ class ENS160:
 
         print("✅ ENS160 готов")
 
-    def get_data(self, temperature=26.0, humidity=27.8):
+    def get_data(self, temperature, humidity):
         try:
             # Преобразуем температуру и влажность в формат ENS160
             temp_int = int(temperature * 100)  # 26.0°C → 2600
@@ -91,18 +92,22 @@ class ENS160:
                     'value':aqi,
                     'unit':'',
                     'description':'Индекс качества воздуха',
-                    'status':status,                },
+                    'status':status,
+                    'timestamp':time.time(),
+                    },
                 'TVOC':{
                     'value':tvoc,
                     'unit':'мкг/м³',
                     'description':'Концентрация летучих органических соединений',
                     'status':status,
+                    'timestamp':time.time(),
                 },
                 'eCO2':{
                     'value':eco2,
                     'unit':'ppm',
                     'description':'Содержание CO₂',
-                    'status':status,                 
+                    'status':status,
+                    'timestamp':time.time(),                 
                 }
               }
             }    
@@ -110,7 +115,7 @@ class ENS160:
 
         except Exception as e:
             print(f"❌ Ошибка чтения ENS160: {e}")
-            logger.ERROR(f"❌ Ошибка чтения ENS160: {e}")
+            logger.error(f"❌ Ошибка чтения ENS160: {e}")
             return None
 
     def close(self):
@@ -120,11 +125,43 @@ class ENS160:
 
             except Exception as e:
                 print(f"⚠️ Ошибка при закрытии шины: {e}")
-                logger.ERROR(f"⚠️ Ошибка при закрытии шины: {e}")
+                logger.error(f"⚠️ Ошибка при закрытии шины: {e}")
 
 
     def __del__(self):
         self.close()
+
+
+def start_process(shared_dict, lock):
+    process_name = 'ENS160'
+    sensor = None
+    
+    try:
+        print(f"🚀 Запуск {process_name}")
+        sensor = ENS160()
+        
+        while True:
+            with lock:
+                aht20_data = shared_dict['Sensor data'].get('AHT20')
+            if aht20_data:
+                temperature=aht20_data['Temperature']['value']
+                humidity=aht20_data['Humidity']['value']
+                data = sensor.get_data(temperature,humidity)
+                if data:
+
+                    update_sensor_data(shared_dict, lock, data)
+                    update_service_status(shared_dict, lock, process_name,'ОК')
+            
+            time.sleep(5)
+            
+    except KeyboardInterrupt:
+        print(f"Процесс {process_name} остановлен")
+    except Exception as e:
+        logger.error(f"Критическая ошибка {process_name}: {e}", exc_info=True)
+        update_service_status(shared_dict, lock, process_name, e)
+    finally:
+        if sensor:
+            sensor.close()
 
 
 def main():

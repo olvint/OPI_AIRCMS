@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""
-Модуль отправки данных в sensor.community API
-Работает с shared_dict: {'air': {'pm25', 'pm10', 'temperature', 'pressure'}}
-"""
 
 import requests
 import time
 import logging
 from typing import Dict
 from datetime import datetime
+from update_shared_dict import update_service_status
 
 # Конфигурация
 BOARD_ID = "raspi-5006471"
@@ -17,12 +14,6 @@ API_URL_MADAVI = "https://api-rrd.madavi.de/data.php"
 TIMEOUT = 10
 SEND_INTERVAL = 180  # 3 минуты - оптимально для карт 
 
-# Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s | %(levelname)s | %(message)s',
-    datefmt='%H:%M:%S'
-)
 logger = logging.getLogger(__name__)
 
 def send_sensor_data(url: str, headers: Dict, data: Dict) -> bool:
@@ -30,7 +21,6 @@ def send_sensor_data(url: str, headers: Dict, data: Dict) -> bool:
     try:
         resp = requests.post(url, json=data, headers=headers, timeout=TIMEOUT)
         if resp.status_code in (200, 201) :
-            logger.info(f"✓ Отправлено в {url.split('/')[2]}: {data['sensordatavalues']}")
             return True
         else:
             logger.warning(f"✗ Ошибка {resp.status_code}: {resp.text[:100]}")
@@ -59,8 +49,8 @@ def push_sds011(pm10: float, pm25: float) -> bool:
     success2 = send_sensor_data(API_URL_MADAVI, headers, data)
     return success1 or success2
 
-def push_bme280(temperature: float, pressure: float, humidity: float = None) -> bool:
-    """BME280 данные (давление в hPa -> Pa)"""
+def push_bmp280(temperature: float, pressure: float, humidity: float = None) -> bool:
+    """BMP280 данные (давление в hPa -> Pa)"""
     headers = {
         "Content-Type": "application/json",
         "X-Pin": "11",
@@ -99,41 +89,34 @@ def send_data(shared_dict: Dict, lock):
     
     while True:
         try:
-            with lock:
-                air_data = dict(shared_dict.get('air', {}))
+            bmp280_data=shared_dict['Sensor data'].get('BMP280')
+            sds011_data=shared_dict['Sensor data'].get('SDS011')
             
             # Проверяем наличие данных
-            if not air_data or air_data.get('status') != 'ok':
-                logger.debug("Нет валидных данных air")
-                time.sleep(10)
-                continue
-            
-            current_time = time.time()
-            
-            # Отправляем раз в SEND_INTERVAL секунд
-            if current_time - last_send >= SEND_INTERVAL:
-                pm10 = air_data.get('pm10', 0)
-                pm25 = air_data.get('pm25', 0)
-                temp = air_data.get('temperature', 0)
-                pressure = air_data.get('pressure', 0)
+            if bmp280_data and sds011_data:
+
+                pm10 = sds011_data['pm10']['value']
+                pm25 = sds011_data['pm25']['value']
+
+                temp = bmp280_data['Temperature']['value']
+                pressure = bmp280_data['Pressure']['value']
                 
-                logger.info(f"📡 Отправка: PM10={pm10} PM2.5={pm25} T={temp}°C P={pressure}hPa")
-                
+
                 # Отправляем PM данные
                 pm_success = push_sds011(pm10, pm25)
                 
                 # Отправляем климат данные
-                climate_success = push_bme280(temp, pressure)
+                climate_success = push_bmp280(temp, pressure)
                 
-                if pm_success or climate_success:
-                    consecutive_errors = 0
-                    last_send = current_time
-                    logger.info("✅ Данные отправлены успешно")
+                if pm_success and climate_success:
+                    update_service_status(shared_dict, lock, 'sensor.community', 'ОК')
                 else:
                     consecutive_errors += 1
-                    logger.warning(f"❌ Ошибка отправки ({consecutive_errors})")
-            
-            # Пауза между проверками
+                    logger.warning.error(f"❌ Ошибка отправки ({consecutive_errors})")
+                    update_service_status(shared_dict, lock, f'sensor.community', 'Ошибка отправки - {consecutive_errors}')
+            else:
+                update_service_status(shared_dict, lock, 'sensor.community', 'Нет данных для отправки')
+
             time.sleep(SEND_INTERVAL)
             
         except KeyboardInterrupt:
@@ -141,7 +124,7 @@ def send_data(shared_dict: Dict, lock):
             break
         except Exception as e:
             consecutive_errors += 1
-            logger.error(f"💥 Критическая ошибка: {e}")
+            update_service_status(shared_dict, lock, 'sensor.community', f'Ошибка {consecutive_errors} - {e}')
             time.sleep(60)  # Дольше ждем при ошибках
     
     logger.info("👋 sensor_community остановлен")

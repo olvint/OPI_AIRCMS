@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Flask веб-интерфейс для отображения данных с датчиков
-Запускается в отдельном потоке
+Обновленная версия с новым форматом данных
 """
 
 import json
@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 from flask import Flask, render_template_string, jsonify
 
-# HTML шаблон с тремя секциями
+# HTML шаблон с новым форматом
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="ru">
@@ -21,12 +21,14 @@ HTML_TEMPLATE = '''
     <style>
         :root {
             --primary: #3498db;
-            --success: #27ae60;
-            --warning: #f39c12;
+            --primary-dark: #2980b9;
+            --secondary: #2ecc71;
             --danger: #e74c3c;
+            --warning: #f39c12;
             --dark: #2c3e50;
             --light: #ecf0f1;
             --gray: #95a5a6;
+            --gray-light: #bdc3c7;
         }
         
         * {
@@ -37,8 +39,8 @@ HTML_TEMPLATE = '''
         }
         
         body {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            color: #333;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            color: var(--dark);
             min-height: 100vh;
             padding: 20px;
         }
@@ -52,7 +54,7 @@ HTML_TEMPLATE = '''
         .header {
             background: white;
             border-radius: 15px;
-            padding: 25px;
+            padding: 25px 30px;
             margin-bottom: 25px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.08);
             display: flex;
@@ -62,35 +64,63 @@ HTML_TEMPLATE = '''
             gap: 20px;
         }
         
-        .header-info {
+        .header-left {
             flex: 1;
+        }
+        
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        
+        .header-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 1.5rem;
         }
         
         h1 {
             color: var(--dark);
-            font-size: 2.2rem;
+            font-size: 2rem;
             font-weight: 600;
-            margin-bottom: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
         }
         
-        .subtitle {
+        .header-subtitle {
             color: var(--gray);
             font-size: 1rem;
             margin-bottom: 15px;
         }
         
-        .last-update {
+        .system-status {
             background: var(--light);
-            padding: 10px 15px;
+            padding: 10px 20px;
             border-radius: 10px;
-            font-size: 0.9rem;
-            color: var(--dark);
             display: inline-flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            font-weight: 500;
+        }
+        
+        .status-indicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--secondary);
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
         }
         
         /* Секции */
@@ -103,32 +133,26 @@ HTML_TEMPLATE = '''
         .section {
             background: white;
             border-radius: 15px;
-            padding: 25px;
+            padding: 30px;
             box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-        }
-        
-        .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 2px solid var(--light);
         }
         
         .section-title {
             color: var(--dark);
             font-size: 1.5rem;
             font-weight: 600;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--light);
             display: flex;
             align-items: center;
             gap: 12px;
         }
         
-        .section-icon {
+        .title-icon {
             width: 40px;
             height: 40px;
-            background: linear-gradient(135deg, var(--primary) 0%, #2980b9 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border-radius: 10px;
             display: flex;
             align-items: center;
@@ -136,11 +160,11 @@ HTML_TEMPLATE = '''
             color: white;
         }
         
-        /* Грид для датчиков (2 в ряд) */
+        /* Секция 1: Датчики - 2 в ряд */
         .sensor-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
-            gap: 20px;
+            gap: 25px;
         }
         
         @media (max-width: 1100px) {
@@ -149,16 +173,12 @@ HTML_TEMPLATE = '''
             }
         }
         
-        /* Карточка датчика */
         .sensor-card {
             background: #f8fafc;
             border-radius: 12px;
             padding: 25px;
             border-left: 5px solid var(--primary);
             transition: all 0.3s ease;
-            display: flex;
-            flex-direction: column;
-            height: 100%;
         }
         
         .sensor-card:hover {
@@ -185,7 +205,7 @@ HTML_TEMPLATE = '''
         .sensor-icon {
             width: 35px;
             height: 35px;
-            background: linear-gradient(135deg, var(--primary) 0%, #2980b9 100%);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -193,7 +213,7 @@ HTML_TEMPLATE = '''
             color: white;
         }
         
-        /* Параметры датчика (2 в ряд) */
+        /* Параметры датчика - 2 в ряд */
         .params-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -209,7 +229,7 @@ HTML_TEMPLATE = '''
         .param-item {
             background: white;
             border-radius: 10px;
-            padding: 18px;
+            padding: 20px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.05);
             transition: all 0.3s ease;
         }
@@ -229,18 +249,33 @@ HTML_TEMPLATE = '''
             font-weight: 500;
         }
         
+        .param-value-container {
+            display: flex;
+            align-items: baseline;
+            margin-bottom: 8px;
+        }
+        
         .param-value {
             font-size: 1.8rem;
             font-weight: 700;
             color: var(--dark);
-            margin-bottom: 5px;
             line-height: 1.2;
         }
         
         .param-unit {
-            font-size: 0.9rem;
-            color: var(--primary);
-            font-weight: 600;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-left: 4px;
+        }
+        
+        .param-timestamp {
+            font-size: 0.85rem;
+            color: var(--gray);
+            margin-top: 5px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
         
         .param-status {
@@ -254,102 +289,110 @@ HTML_TEMPLATE = '''
             font-weight: 500;
         }
         
-        /* Секция статуса */
-        .status-section {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+        /* Секция 2: Service Data - как есть */
+        .service-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
         }
         
-        .status-card {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 30px;
-            margin-top: 20px;
+        @media (max-width: 900px) {
+            .service-grid {
+                grid-template-columns: 1fr;
+            }
         }
         
-        .status-header {
+        .service-item {
+            background: #f8fafc;
+            border-radius: 12px;
+            padding: 25px;
+            border-left: 5px solid var(--secondary);
+            transition: all 0.3s ease;
+        }
+        
+        .service-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+        
+        .service-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 25px;
+            margin-bottom: 15px;
         }
         
-        .status-title {
-            font-size: 1.3rem;
+        .service-name {
+            font-size: 1.2rem;
+            color: var(--dark);
             font-weight: 600;
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
         }
         
-        .status-badge {
-            padding: 8px 20px;
-            border-radius: 20px;
-            font-weight: 600;
+        .service-icon {
+            width: 30px;
+            height: 30px;
+            background: var(--secondary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+        
+        .service-message {
+            font-size: 1.1rem;
+            color: var(--dark);
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+        
+        .service-timestamp {
             font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        
-        .status-ok {
-            background: var(--success);
-            color: white;
-        }
-        
-        .status-error {
-            background: var(--danger);
-            color: white;
-        }
-        
-        .status-warning {
-            background: var(--warning);
-            color: white;
-        }
-        
-        .status-content {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 25px;
-        }
-        
-        .status-item {
-            background: rgba(255, 255, 255, 0.15);
-            border-radius: 10px;
-            padding: 20px;
-        }
-        
-        .status-label {
-            font-size: 0.9rem;
-            opacity: 0.9;
-            margin-bottom: 8px;
+            color: var(--gray);
             display: flex;
             align-items: center;
             gap: 8px;
+            padding-top: 15px;
+            border-top: 1px solid var(--light);
         }
         
-        .status-text {
-            font-size: 1.3rem;
-            font-weight: 600;
+        .time-ago {
+            background: var(--light);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 500;
         }
         
-        .timestamp {
-            font-family: 'Courier New', monospace;
-            background: rgba(0, 0, 0, 0.2);
-            padding: 8px 12px;
-            border-radius: 6px;
+        /* Футер */
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            color: var(--gray);
             font-size: 0.9rem;
+            padding-top: 20px;
+            border-top: 1px solid var(--light);
         }
         
-        /* Управление */
+        .update-info {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        
         .controls {
             display: flex;
             justify-content: center;
             gap: 15px;
-            margin-top: 25px;
-            padding-top: 25px;
-            border-top: 1px solid rgba(255, 255, 255, 0.2);
+            margin-top: 20px;
         }
         
         .btn {
@@ -363,34 +406,27 @@ HTML_TEMPLATE = '''
             display: flex;
             align-items: center;
             gap: 8px;
-            background: white;
-            color: var(--dark);
-        }
-        
-        .btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.15);
         }
         
         .btn-refresh {
-            background: white;
-            color: var(--primary);
+            background: var(--primary);
+            color: white;
+        }
+        
+        .btn-refresh:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
         }
         
         .btn-json {
-            background: white;
-            color: var(--success);
+            background: var(--secondary);
+            color: white;
         }
         
-        /* Иконки */
-        .icon-temperature { color: #ff6b6b; }
-        .icon-humidity { color: #4d96ff; }
-        .icon-pressure { color: #9c88ff; }
-        .icon-air { color: #10ac84; }
-        .icon-pm { color: #ff9f43; }
-        .icon-cpu { color: #8395a7; }
-        .icon-time { color: #574b90; }
-        .icon-generic { color: var(--gray); }
+        .btn-json:hover {
+            background: #27ae60;
+            transform: translateY(-2px);
+        }
         
         /* Анимации */
         @keyframes fadeInUp {
@@ -408,8 +444,8 @@ HTML_TEMPLATE = '''
             animation: fadeInUp 0.6s ease-out;
         }
         
-        /* Прогресс бар */
-        .update-progress {
+        /* Таймер обновления */
+        .refresh-timer {
             height: 4px;
             background: var(--light);
             border-radius: 2px;
@@ -417,12 +453,21 @@ HTML_TEMPLATE = '''
             overflow: hidden;
         }
         
-        .progress-bar {
+        .timer-bar {
             height: 100%;
             background: var(--primary);
             width: 0%;
             transition: width 60s linear;
         }
+        
+        /* Цвета иконок по типам датчиков */
+        .icon-temperature { color: #ff6b6b; }
+        .icon-humidity { color: #4d96ff; }
+        .icon-pressure { color: #9c88ff; }
+        .icon-air { color: #10ac84; }
+        .icon-pm { color: #ff9f43; }
+        .icon-cpu { color: #8395a7; }
+        .icon-generic { color: var(--gray); }
     </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
@@ -430,14 +475,20 @@ HTML_TEMPLATE = '''
     <div class="container">
         <!-- Шапка -->
         <div class="header fade-in">
-            <div class="header-info">
-                <h1><i class="fas fa-chart-network"></i> Система мониторинга</h1>
-                <p class="subtitle">Реальное время | Все датчики онлайн</p>
-                <div class="last-update" id="lastUpdate">
-                    <i class="fas fa-clock"></i> Последнее обновление: <span id="updateTime">загружается...</span>
+            <div class="header-left">
+                <div class="header-title">
+                    <div class="header-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h1>Система мониторинга окружающей среды</h1>
                 </div>
-                <div class="update-progress">
-                    <div class="progress-bar" id="progressBar"></div>
+                <p class="header-subtitle">Реальное время • Все датчики онлайн • Автообновление</p>
+                <div class="system-status">
+                    <div class="status-indicator"></div>
+                    <span>Система активна • Обновлено: <span id="lastUpdateTime">{{ current_time|datetime_format }}</span></span>
+                </div>
+                <div class="refresh-timer">
+                    <div class="timer-bar" id="timerBar"></div>
                 </div>
             </div>
         </div>
@@ -445,13 +496,11 @@ HTML_TEMPLATE = '''
         <div class="sections-container">
             <!-- Секция 1: Основные датчики -->
             <div class="section fade-in">
-                <div class="section-header">
-                    <div class="section-title">
-                        <div class="section-icon">
-                            <i class="fas fa-microchip"></i>
-                        </div>
-                        Основные датчики
+                <div class="section-title">
+                    <div class="title-icon">
+                        <i class="fas fa-microchip"></i>
                     </div>
+                    Основные датчики
                 </div>
                 
                 <div class="sensor-grid">
@@ -475,19 +524,30 @@ HTML_TEMPLATE = '''
                                 {% for param_name, param_data in sensor_data.items() %}
                                     <div class="param-item">
                                         <div class="param-name">
-                                            <i class="fas {% if 'Temperature' in param_name or 'temp' in param_name.lower() %}fa-thermometer-half icon-temperature
-                                                        {% elif 'Humidity' in param_name or 'hum' in param_name.lower() %}fa-tint icon-humidity
-                                                        {% elif 'Pressure' in param_name or 'press' in param_name.lower() %}fa-tachometer-alt icon-pressure
-                                                        {% elif 'PM' in param_name or 'pm' in param_name %}fa-smog icon-pm
+                                            <i class="fas {% if 'Temperature' in param_name %}fa-thermometer-half icon-temperature
+                                                        {% elif 'Humidity' in param_name %}fa-tint icon-humidity
+                                                        {% elif 'Pressure' in param_name %}fa-tachometer-alt icon-pressure
+                                                        {% elif 'pm25' in param_name or 'pm10' in param_name %}fa-smog icon-pm
                                                         {% elif 'AQI' in param_name %}fa-wind icon-air
                                                         {% elif 'TVOC' in param_name %}fa-industry icon-air
-                                                        {% elif 'CO2' in param_name or 'eco2' in param_name.lower() %}fa-leaf icon-air
+                                                        {% elif 'eCO2' in param_name %}fa-leaf icon-air
                                                         {% else %}fa-chart-bar icon-generic{% endif %}">
                                             </i>
                                             {{ param_data.description }}
                                         </div>
-                                        <div class="param-value">{{ param_data.value }}</div>
-                                        <div class="param-unit">{{ param_data.unit }}</div>
+                                        <div class="param-value-container">
+                                            <span class="param-value">{{ param_data.value }}</span>
+                                            {% if param_data.unit %}
+                                                <span class="param-unit">{{ param_data.unit }}</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="param-timestamp">
+                                            <i class="far fa-clock"></i>
+                                            <span>{{ param_data.timestamp|datetime_format_short }}</span>
+                                            <span class="time-ago" data-timestamp="{{ param_data.timestamp }}">
+                                                <!-- Заполнится JavaScript -->
+                                            </span>
+                                        </div>
                                         {% if param_data.status %}
                                             <div class="param-status">
                                                 <i class="fas fa-info-circle"></i> {{ param_data.status }}
@@ -501,153 +561,69 @@ HTML_TEMPLATE = '''
                 </div>
             </div>
             
-            <!-- Секция 2: Служебные датчики -->
+            <!-- Секция 2: Service Data -->
             <div class="section fade-in">
-                <div class="section-header">
-                    <div class="section-title">
-                        <div class="section-icon">
-                            <i class="fas fa-server"></i>
-                        </div>
-                        Служебные датчики
+                <div class="section-title">
+                    <div class="title-icon">
+                        <i class="fas fa-cogs"></i>
                     </div>
+                    Служебная информация
                 </div>
                 
-                <div class="sensor-grid">
-                    {% for key, value in service_data_dict.items() %}
-                        <div class="sensor-card">
-                            <div class="sensor-header">
-                                <div class="sensor-name">
-                                    <div class="sensor-icon">
-                                        <i class="fas {% if 'cpu' in key.lower() or 'temperature' in key.lower() %}fa-microchip
-                                                    {% elif 'time' in key.lower() %}fa-clock
-                                                    {% elif 'memory' in key.lower() %}fa-memory
-                                                    {% elif 'disk' in key.lower() %}fa-hdd
-                                                    {% elif 'network' in key.lower() %}fa-network-wired
+                <div class="service-grid">
+                    {% for service_name, service_data in service_data_dict.items() %}
+                        <div class="service-item">
+                            <div class="service-header">
+                                <div class="service-name">
+                                    <div class="service-icon">
+                                        <i class="fas {% if 'AHT' in service_name or 'BMP' in service_name %}fa-thermometer-half
+                                                    {% elif 'ENS' in service_name %}fa-leaf
+                                                    {% elif 'SDS' in service_name %}fa-wind
+                                                    {% elif 'CPU' in service_name %}fa-microchip
+                                                    {% elif 'sensor.community' in service_name %}fa-cloud-upload-alt
                                                     {% else %}fa-cog{% endif %}">
                                         </i>
                                     </div>
-                                    {{ value.description if value.description is defined else key }}
+                                    {{ service_name }}
                                 </div>
                             </div>
                             
-                            <div class="params-grid">
-                                {% if key == 'timestamp' %}
-                                    <div class="param-item" style="grid-column: span 2;">
-                                        <div class="param-name">
-                                            <i class="fas fa-clock icon-time"></i>
-                                            Время измерения
-                                        </div>
-                                        <div class="param-value timestamp">{{ value|datetime_format }}</div>
-                                        <div class="param-unit">системное время</div>
-                                    </div>
-                                {% else %}
-                                    <div class="param-item">
-                                        <div class="param-name">
-                                            <i class="fas fa-chart-bar icon-generic"></i>
-                                            Значение
-                                        </div>
-                                        <div class="param-value">{{ value.value if value.value is defined else value }}</div>
-                                        <div class="param-unit">{{ value.unit if value.unit is defined else '' }}</div>
-                                    </div>
-                                    
-                                    {% if value.description is defined and key != value.description %}
-                                        <div class="param-item">
-                                            <div class="param-name">
-                                                <i class="fas fa-info-circle icon-generic"></i>
-                                                Описание
-                                            </div>
-                                            <div class="param-value" style="font-size: 1.2rem;">{{ value.description }}</div>
-                                        </div>
-                                    {% endif %}
-                                {% endif %}
+                            <div class="service-message">
+                                {{ service_data.message }}
+                            </div>
+                            
+                            <div class="service-timestamp">
+                                <i class="far fa-calendar-alt"></i>
+                                <span>{{ service_data.timestamp|datetime_format }}</span>
+                                <span class="time-ago" data-timestamp="{{ service_data.timestamp }}">
+                                    <!-- Заполнится JavaScript -->
+                                </span>
                             </div>
                         </div>
                     {% endfor %}
                 </div>
             </div>
+        </div>
+        
+        <!-- Футер -->
+        <div class="footer">
+            <div class="update-info">
+                <i class="fas fa-sync-alt"></i>
+                <span>Автообновление каждые 5 секунд</span>
+            </div>
             
-            <!-- Секция 3: Статус системы -->
-            <div class="section status-section fade-in">
-                <div class="section-header">
-                    <div class="section-title" style="color: white;">
-                        <div class="section-icon" style="background: rgba(255, 255, 255, 0.2);">
-                            <i class="fas fa-heartbeat"></i>
-                        </div>
-                        Статус системы
-                    </div>
-                </div>
-                
-                <div class="status-card">
-                    <div class="status-header">
-                        <div class="status-title">
-                            <i class="fas fa-shield-alt"></i>
-                            Состояние мониторинга
-                        </div>
-                        {% if sensor_status %}
-                            <div class="status-badge status-{{ sensor_status.status.lower() }}">
-                                {{ sensor_status.status }}
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="status-content">
-                        {% if sensor_status %}
-                            <div class="status-item">
-                                <div class="status-label">
-                                    <i class="fas fa-comment-alt"></i>
-                                    Сообщение
-                                </div>
-                                <div class="status-text">{{ sensor_status.text }}</div>
-                            </div>
-                            
-                            <div class="status-item">
-                                <div class="status-label">
-                                    <i class="fas fa-clock"></i>
-                                    Время статуса
-                                </div>
-                                <div class="status-text timestamp">{{ sensor_status.timestamp|datetime_format }}</div>
-                            </div>
-                            
-                            <div class="status-item">
-                                <div class="status-label">
-                                    <i class="fas fa-history"></i>
-                                    Активность
-                                </div>
-                                <div class="status-text">
-                                    <i class="fas fa-circle" style="color: #2ecc71; margin-right: 8px;"></i>
-                                    Система активна
-                                </div>
-                            </div>
-                        {% else %}
-                            <div class="status-item">
-                                <div class="status-label">
-                                    <i class="fas fa-exclamation-triangle"></i>
-                                    Статус недоступен
-                                </div>
-                                <div class="status-text">Данные о состоянии системы не получены</div>
-                            </div>
-                        {% endif %}
-                    </div>
-                    
-                    <div class="controls">
-                        <button class="btn btn-refresh" onclick="refreshData()">
-                            <i class="fas fa-redo"></i> Обновить данные
-                        </button>
-                        <button class="btn btn-json" onclick="showJsonData()">
-                            <i class="fas fa-code"></i> Показать JSON
-                        </button>
-                    </div>
-                </div>
+            <div class="controls">
+                <button class="btn btn-refresh" onclick="refreshData()">
+                    <i class="fas fa-redo"></i> Обновить сейчас
+                </button>
+                <button class="btn btn-json" onclick="showJsonData()">
+                    <i class="fas fa-code"></i> Показать JSON
+                </button>
             </div>
         </div>
     </div>
     
     <script>
-        // Элементы DOM
-        const lastUpdateElement = document.getElementById('lastUpdate');
-        const updateTimeElement = document.getElementById('updateTime');
-        const progressBar = document.getElementById('progressBar');
-        
         // Форматирование времени
         function formatDateTime(timestamp) {
             if (!timestamp) return 'неизвестно';
@@ -655,51 +631,81 @@ HTML_TEMPLATE = '''
             return date.toLocaleString('ru-RU');
         }
         
-        // Обновление времени и прогресс-бара
-        function updateTimeAndProgress() {
-            fetch('/api/timestamp')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.timestamp) {
-                        const formattedTime = formatDateTime(data.timestamp);
-                        updateTimeElement.textContent = formattedTime;
-                        
-                        // Сброс и запуск прогресс-бара
-                        progressBar.style.width = '0%';
-                        setTimeout(() => {
-                            progressBar.style.width = '100%';
-                        }, 10);
-                    }
-                })
-                .catch(error => {
-                    console.error('Ошибка обновления времени:', error);
-                    updateTimeElement.textContent = 'ошибка';
-                });
+        // Форматирование времени коротко
+        function formatDateTimeShort(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp * 1000);
+            return date.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        }
+        
+        // Расчет времени назад с округлением до целого
+        function timeAgo(timestamp) {
+            if (!timestamp) return '';
+            const now = Math.floor(Date.now() / 1000);
+            const diff = Math.round(now - timestamp); // Округляем до целого
+            
+            if (diff < 60) return `${diff} сек. назад`;
+            if (diff < 3600) return `${Math.floor(diff / 60)} мин. назад`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)} час. назад`;
+            return `${Math.floor(diff / 86400)} дн. назад`;
+        }
+        
+        // Обновление времени "X сек. назад"
+        function updateTimeAgo() {
+            document.querySelectorAll('.time-ago').forEach(el => {
+                const timestamp = parseFloat(el.getAttribute('data-timestamp'));
+                if (timestamp) {
+                    el.textContent = timeAgo(timestamp);
+                }
+            });
+        }
+        
+        // Обновление времени в шапке
+        function updateHeaderTime() {
+            const now = Math.floor(Date.now() / 1000);
+            const lastUpdateElement = document.getElementById('lastUpdateTime');
+            if (lastUpdateElement) {
+                lastUpdateElement.textContent = formatDateTime(now);
+            }
+        }
+        
+        // Обновление таймера
+        function updateTimer() {
+            const timerBar = document.getElementById('timerBar');
+            if (timerBar) {
+                timerBar.style.transition = 'none';
+                timerBar.style.width = '0%';
+                
+                setTimeout(() => {
+                    timerBar.style.transition = 'width 60s linear';
+                    timerBar.style.width = '100%';
+                }, 10);
+            }
         }
         
         // Ручное обновление страницы
         function refreshData() {
-            const btn = event.target;
-            const originalText = btn.innerHTML;
-            
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновление...';
-            btn.disabled = true;
-            
-            // Перезагружаем страницу
-            location.reload();
-            
-            setTimeout(() => {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
-            }, 2000);
+            const btn = event.target.closest('.btn');
+            if (btn) {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обновление...';
+                btn.disabled = true;
+                
+                location.reload();
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }
         }
         
         // Показать JSON данные
         function showJsonData() {
-            fetch('/api/raw')
+            fetch('/api')
                 .then(response => response.json())
                 .then(data => {
-                    // Создаем модальное окно
+                    // Модальное окно для JSON
                     const modal = document.createElement('div');
                     modal.style.cssText = `
                         position: fixed;
@@ -715,48 +721,50 @@ HTML_TEMPLATE = '''
                         padding: 20px;
                     `;
                     
-                    const modalContent = document.createElement('div');
-                    modalContent.style.cssText = `
-                        background: #1e1e1e;
-                        color: #d4d4d4;
-                        padding: 30px;
-                        border-radius: 10px;
-                        max-width: 90%;
-                        max-height: 90%;
-                        overflow: auto;
-                        position: relative;
+                    modal.innerHTML = `
+                        <div style="
+                            background: #1e1e1e;
+                            color: #d4d4d4;
+                            padding: 30px;
+                            border-radius: 10px;
+                            max-width: 90%;
+                            max-height: 90%;
+                            overflow: auto;
+                            position: relative;
+                            width: 800px;
+                        ">
+                            <button onclick="this.parentElement.parentElement.remove()" style="
+                                position: absolute;
+                                top: 15px;
+                                right: 15px;
+                                background: #e74c3c;
+                                color: white;
+                                border: none;
+                                width: 30px;
+                                height: 30px;
+                                border-radius: 50%;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-size: 1rem;
+                            ">
+                                <i class="fas fa-times"></i>
+                            </button>
+                            <h3 style="color: white; margin-bottom: 20px;">JSON данные</h3>
+                            <pre style="
+                                background: #252526;
+                                padding: 20px;
+                                border-radius: 5px;
+                                overflow: auto;
+                                font-family: 'Courier New', monospace;
+                                font-size: 14px;
+                                line-height: 1.5;
+                                max-height: 70vh;
+                            ">${JSON.stringify(data, null, 2)}</pre>
+                        </div>
                     `;
                     
-                    const closeBtn = document.createElement('button');
-                    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                    closeBtn.style.cssText = `
-                        position: absolute;
-                        top: 15px;
-                        right: 15px;
-                        background: #e74c3c;
-                        color: white;
-                        border: none;
-                        width: 30px;
-                        height: 30px;
-                        border-radius: 50%;
-                        cursor: pointer;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    `;
-                    closeBtn.onclick = () => modal.remove();
-                    
-                    const pre = document.createElement('pre');
-                    pre.style.cssText = `
-                        font-family: 'Courier New', monospace;
-                        font-size: 14px;
-                        line-height: 1.5;
-                    `;
-                    pre.textContent = JSON.stringify(data, null, 2);
-                    
-                    modalContent.appendChild(closeBtn);
-                    modalContent.appendChild(pre);
-                    modal.appendChild(modalContent);
                     document.body.appendChild(modal);
                 })
                 .catch(error => {
@@ -765,35 +773,35 @@ HTML_TEMPLATE = '''
                 });
         }
         
-        // Автообновление времени каждые 5 секунд
-        setInterval(() => {
-            updateTimeAndProgress();
-        }, 5000);
-        
-        // Автообновление страницы каждые 60 секунд
-        let reloadTimeout = setTimeout(() => {
-            location.reload();
-        }, 60000);
-        
-        // Сброс таймера при активности пользователя
-        document.addEventListener('mousemove', () => {
-            clearTimeout(reloadTimeout);
-            reloadTimeout = setTimeout(() => {
+        // Инициализация
+        document.addEventListener('DOMContentLoaded', function() {
+            updateTimeAgo();
+            updateHeaderTime();
+            updateTimer();
+            
+            // Автообновление времени "X сек. назад"
+            setInterval(updateTimeAgo, 1000);
+            
+            // Автообновление страницы каждые 60 секунд
+            setTimeout(() => {
                 location.reload();
             }, 60000);
-        });
-        
-        // Инициализация
-        updateTimeAndProgress();
-        
-        // Анимация при загрузке
-        document.addEventListener('DOMContentLoaded', function() {
-            const elements = document.querySelectorAll('.fade-in');
-            elements.forEach((el, index) => {
+            
+            // Сброс таймера при активности пользователя
+            document.addEventListener('mousemove', () => {
+                clearTimeout(window.reloadTimeout);
+                window.reloadTimeout = setTimeout(() => {
+                    location.reload();
+                }, 60000);
+            });
+            
+            // Анимация появления элементов
+            const fadeElements = document.querySelectorAll('.fade-in');
+            fadeElements.forEach((el, index) => {
                 setTimeout(() => {
                     el.style.opacity = '1';
                     el.style.transform = 'translateY(0)';
-                }, index * 200);
+                }, index * 100);
             });
         });
     </script>
@@ -809,7 +817,7 @@ class FlaskSensorApp:
         self.shared_dict = None
         self.lock = None
         
-        # Регистрируем кастомный фильтр для Jinja2
+        # Регистрируем кастомные фильтры для Jinja2
         @self.app.template_filter('datetime_format')
         def datetime_format(timestamp):
             """Фильтр для форматирования timestamp в читаемый вид"""
@@ -820,6 +828,17 @@ class FlaskSensorApp:
             except:
                 pass
             return str(timestamp)
+        
+        @self.app.template_filter('datetime_format_short')
+        def datetime_format_short(timestamp):
+            """Фильтр для короткого форматирования времени"""
+            try:
+                if isinstance(timestamp, (int, float)):
+                    dt = datetime.fromtimestamp(timestamp)
+                    return dt.strftime('%H:%M:%S')
+            except:
+                pass
+            return ''
         
         # Настраиваем маршруты
         self.setup_routes()
@@ -839,35 +858,20 @@ class FlaskSensorApp:
             # Подготавливаем данные для шаблона
             sensor_data = data.get('Sensor data', {})
             service_data = data.get('Service data', {})
-            sensor_status = data.get('sensor status', {})
             
-            # Унифицированная обработка Service data
-            processed_service_data = {}
-            for key, value in service_data.items():
-                if isinstance(value, dict) and 'value' in value:
-                    # Если уже словарь с value
-                    processed_service_data[key] = value
-                elif key == 'timestamp':
-                    # Особый случай для timestamp
-                    processed_service_data[key] = value
-                else:
-                    # Преобразуем в словарь
-                    processed_service_data[key] = {
-                        'value': value,
-                        'description': key,
-                        'unit': ''
-                    }
+            # Добавляем текущее время для отображения
+            current_time = time.time()
             
             return render_template_string(
                 HTML_TEMPLATE,
                 sensor_data_dict=sensor_data,
-                service_data_dict=processed_service_data,
-                sensor_status=sensor_status
+                service_data_dict=service_data,
+                current_time=current_time
             )
         
-        @self.app.route('/api/data')
+        @self.app.route('/api')
         def api_data():
-            """API endpoint для получения структурированных данных"""
+            """API endpoint для получения данных в JSON формате"""
             if not self.shared_dict:
                 return jsonify({'error': 'Data not available'}), 503
             
@@ -875,7 +879,6 @@ class FlaskSensorApp:
                 data = dict(self.shared_dict)
             
             return jsonify(data)
-    
         
         @self.app.route('/api/timestamp')
         def api_timestamp():
@@ -886,26 +889,18 @@ class FlaskSensorApp:
             with self.lock:
                 data = dict(self.shared_dict)
             
-            timestamp = data.get('Service data', {}).get('timestamp', time.time())
+            # Получаем самый свежий timestamp из данных
+            latest_timestamp = 0
+            for sensor_data in data.get('Sensor data', {}).values():
+                for param_data in sensor_data.values():
+                    if 'timestamp' in param_data:
+                        latest_timestamp = max(latest_timestamp, param_data.get('timestamp', 0))
             
-            return jsonify({'timestamp': timestamp})
-        
-        @self.app.route('/api/status')
-        def api_status():
-            """API для получения статуса"""
-            if not self.shared_dict:
-                return jsonify({'status': 'ERROR', 'message': 'No data'}), 503
+            for service_data in data.get('Service data', {}).values():
+                if 'timestamp' in service_data:
+                    latest_timestamp = max(latest_timestamp, service_data.get('timestamp', 0))
             
-            with self.lock:
-                data = dict(self.shared_dict)
-            
-            status_data = data.get('sensor status', {})
-            
-            return jsonify({
-                'status': status_data.get('status', 'UNKNOWN'),
-                'message': status_data.get('text', 'No status message'),
-                'timestamp': status_data.get('timestamp', time.time())
-            })
+            return jsonify({'timestamp': latest_timestamp or time.time()})
         
         @self.app.route('/api/health')
         def api_health():
@@ -916,16 +911,24 @@ class FlaskSensorApp:
             with self.lock:
                 data = dict(self.shared_dict)
             
+            # Проверяем свежесть данных
+            now = time.time()
+            max_age = 0
+            
+            for sensor_data in data.get('Sensor data', {}).values():
+                for param_data in sensor_data.values():
+                    if 'timestamp' in param_data:
+                        age = now - param_data.get('timestamp', 0)
+                        max_age = max(max_age, age)
+            
             has_data = bool(data.get('Sensor data', {}))
-            status = data.get('sensor status', {}).get('status', 'UNKNOWN')
-            age = time.time() - data.get('Service data', {}).get('timestamp', 0)
+            is_fresh = max_age < 30  # Данные не старше 30 секунд
             
             return jsonify({
-                'status': 'healthy' if has_data and status == 'OK' and age < 30 else 'unhealthy',
-                'sensor_status': status,
-                'data_age': age,
+                'status': 'healthy' if has_data and is_fresh else 'unhealthy',
+                'data_age': max_age,
                 'has_data': has_data,
-                'timestamp': time.time()
+                'timestamp': now
             })
     
     def _error_page(self, message):

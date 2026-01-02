@@ -4,9 +4,11 @@ import logging
 from typing import Optional
 import time
 
+from update_shared_dict import update_sensor_data, update_service_status
+
 logger = logging.getLogger(__name__)
 
-class CPUTemperature:
+class CPUTemp:
     """Класс для получения температуры процессора"""
     
     def __init__(self, temp_path: str = '/sys/class/thermal/thermal_zone0/temp'):
@@ -24,27 +26,30 @@ class CPUTemperature:
                 with open(self.temp_path, 'r') as f:
                     temp_millic = int(f.read().strip())
                     temp_c = temp_millic / 1000.0
-                    
-                    # Проверка на разумные значения (обычно 0-100°C для процессора)
-                    if 0 <= temp_c <= 100:
-                        return {'CPU_Temperature':{
-                            'value':round(temp_c, 1),
-                            'unit':'°C',
-                            'description':'Температура процессора',
-                            
-                            }
-                        }
+                    return round(temp_c)
                         
-                    else:
-                        logger.warning(f"CPU temp out of range: {temp_c}°C")
-                        return None
-                        
-            logger.warning(f"CPU temp file not found: {self.temp_path}")
-            return None
-            
         except Exception as e:
-            logger.error(f"CPU temp ошибка: {e}")
-            return None
+            return e
+
+def start_process(shared_dict, lock):
+    process_name = 'CPU_TEMP'
+    sensor = None
+    
+    try:
+        print(f"🚀 Запуск {process_name}")
+        sensor = CPUTemp()
+        
+        while True:
+            temp_c = sensor.get_data()
+            update_service_status(shared_dict, lock, process_name, f'CPU_temp = {temp_c} °C')
+            
+            time.sleep(5)
+            
+    except KeyboardInterrupt:
+        print(f"Процесс {process_name} остановлен")
+    except Exception as e:
+        logger.error(f"Критическая ошибка {process_name}: {e}", exc_info=True)
+        update_service_status(shared_dict,lock,process_name, e)
 
 def main():
     sensor = CPUTemperature()

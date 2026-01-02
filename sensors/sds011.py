@@ -4,6 +4,8 @@ import struct
 import logging
 from typing import Optional, Tuple
 import time
+from update_shared_dict import update_sensor_data, update_service_status
+
 
 logger = logging.getLogger(__name__)
 
@@ -39,11 +41,13 @@ class SDS011:
                                             'value':round(pm25,2),
                                             'unit':'мкг/м³',
                                             'description':'PM 2.5',
+                                            'timestamp':time.time(),
                                         },
                                         'pm10':{
                                             'value':round(pm10,2),
                                             'unit':'мкг/м³',
                                             'description':'PM 10',
+                                            'timestamp':time.time(),
                                         }}
                     }
                     
@@ -52,6 +56,31 @@ class SDS011:
             logger.error(f"SDS011 ошибка: {e}")
         
         return None
+
+def start_process(shared_dict, lock):
+    process_name = 'SDS011'
+    sensor = None
+    
+    try:
+        print(f"🚀 Запуск {process_name}")
+        sensor = SDS011()
+        
+        while True:
+            data = sensor.get_data()
+            if data:
+
+                update_sensor_data(shared_dict, lock, data)
+                update_service_status(shared_dict, lock, process_name,'ОК')
+
+            time.sleep(5)
+            
+    except KeyboardInterrupt:
+        print(f"Процесс {process_name} остановлен")
+    except Exception as e:
+        logger.error(f"Критическая ошибка {process_name}: {e}", exc_info=True)
+        update_service_status(shared_dict, lock, process_name, e)
+
+
 
 def main():
     sensor = SDS011()

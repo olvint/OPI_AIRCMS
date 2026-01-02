@@ -7,7 +7,15 @@ import threading
 
 # Импорты модулей
 from webfront import flaskweb
-from sensors.sensor_manager import get_sensors_data
+
+from sensors import aht20_bmp280
+from sensors import ens160
+from sensors import sds011
+from sensors import cpu_temperature
+
+from senders import sensor_community
+
+from update_shared_dict import update_service_status
 
 # Настройка логирования
 logging.basicConfig(
@@ -15,6 +23,7 @@ logging.basicConfig(
     format='%(asctime)s - %(message)s',
     datefmt='%H:%M:%S'
 )
+logger = logging.getLogger(__name__)
 
 def signal_handler(sig, frame):
     print(f"\n🛑 Получен сигнал {sig}, останавливаю процессы...")
@@ -57,12 +66,7 @@ def main():
         # Инициализируем начальные данные
         shared_dict.update({
             'Sensor data': {},
-            'Service data': {'timestamp': time.time()},
-            'sensor status': {
-                'status': 'STARTING',
-                'text': 'Система запускается',
-                'timestamp': time.time()
-            }
+            'Service data': {},
         })
         
         # Создаем блокировку для безопасного доступа к общим данным
@@ -88,14 +92,54 @@ def main():
         # Создаем и запускаем процессы
         processes = []
         
-        # Процесс сенсоров
-        sensor_process = multiprocessing.Process(
-            target=get_sensors_data,
+        # Процесс сенсора aht20_bmp280
+        aht20_bmp280_process = multiprocessing.Process(
+            target=aht20_bmp280.start_process,
             args=(shared_dict, lock),
-            name="SensorManager",
+            name="aht20_bmp280",
             daemon=True
         )
-        processes.append(sensor_process)
+        processes.append(aht20_bmp280_process)
+
+        # Процесс сенсора ens160
+        ens160_process = multiprocessing.Process(
+            target=ens160.start_process,
+            args=(shared_dict, lock),
+            name="ens160",
+            daemon=True
+        )
+        processes.append(ens160_process)
+
+
+        # Процесс сенсора sds011
+        sds011_process = multiprocessing.Process(
+            target=sds011.start_process,
+            args=(shared_dict, lock),
+            name="sds011",
+            daemon=True
+        )
+        processes.append(sds011_process)
+
+
+        # Процесс Датчика температуры
+        cputemp_process = multiprocessing.Process(
+            target=cpu_temperature.start_process,
+            args=(shared_dict, lock),
+            name="cputemp",
+            daemon=True
+        )
+        processes.append(cputemp_process)
+
+        # Процесс отправки данных
+        sensor_community_process = multiprocessing.Process(
+            target=sensor_community.send_data,
+            args=(shared_dict, lock),
+            name="sensor_community",
+            daemon=True
+        )
+        processes.append(sensor_community_process)
+
+
         
         # Запускаем все процессы
         print("📡 Запуск процессов сенсоров...")
@@ -118,17 +162,9 @@ def main():
         try:
             # Основной цикл - просто ждем
             while True:
-                # Обновляем статус в shared_dict
-                with lock:
-                    shared_dict['system status'] = {
-                        'status': 'OK',
-                        'text': 'Система работает',
-                        'timestamp': time.time()
-                    }
-                
                 # Выводим информацию о состоянии
                 alive_processes = sum(1 for p in processes if p.is_alive())
-                print(f"[{time.strftime('%H:%M:%S')}] Работает процессов: {alive_processes}/{len(processes)}", end='\r')
+                update_service_status(shared_dict, lock, 'Main',f"Работает процессов: {alive_processes}/{len(processes)}")
                 
                 time.sleep(5)
                 
@@ -136,6 +172,7 @@ def main():
             print("\n\n🛑 Остановка системы...")
         except Exception as e:
             print(f"\n❌ Ошибка: {e}")
+            logger.error(e)
         finally:
             # Останавливаем процессы
             print("⏹️  Остановка процессов...")
