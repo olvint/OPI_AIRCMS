@@ -13,7 +13,8 @@ aht20_addr = 0x38
 logger = logging.getLogger(__name__)
 
 class AHT20_BMP280:
-    def __init__(self):
+    
+    def __init__(self): 
         self.bus_num = bus_num
         self.bmp280_addr = bmp280_addr
         self.aht20_addr = aht20_addr
