@@ -1,5 +1,34 @@
-bin/
-lib/
-test/
-airsensor.log
-**/__pycache__/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+sensors.log
+*.log
+
+# System
+.DS_Store
+Thumbs.db
