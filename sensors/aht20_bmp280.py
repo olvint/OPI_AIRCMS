@@ -2,13 +2,15 @@
 import time
 import logging
 from smbus2 import SMBus
+from update_shared_dict import update_sensor_data, update_service_status
+
 
 # Конфигурация
 bus_num = 1  
 bmp280_addr = 0x77  
 aht20_addr = 0x38
 
-logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class AHT20_BMP280:
     def __init__(self):
@@ -161,34 +163,11 @@ class AHT20_BMP280:
         temp_b, press_b = self.read_bmp280()
 
         return {
-            'AHT20':{
-                'Temperature':{
-                    'value':round(temp_a,2),
-                    'unit':'°C',
-                    'description':'Температура',
-
-                },
-                'Humidity':{
-                    'value':round(hum_a,2),
-                    'unit':'%',
-                    'description':'Влажность',
-
-                },
-            },   
-            'BMP280':{
-                'Temperature':{
-                    'value':round(temp_b,2),
-                    'unit':'°C',
-                    'description':'Температура',
-                },
-                'Pressure':{
-                    'value':round(press_b,2),
-                    'unit':'гПа',
-                    'description':'Давление',
-                },
-            },    
+            'aht20_temperature': temp_a,
+            'aht20_humidity': hum_a,
+            'bmp280_temperature': temp_b,
+            'bmp280_pressure': press_b
         }
-
 
     def close(self):
         if self.bus:
@@ -200,6 +179,32 @@ class AHT20_BMP280:
 
     def __del__(self):
         self.close()
+
+
+
+def start_process(shared_dict, lock):
+    process_name = 'AHT20_BMP280'
+    sensor = None
+    
+    try:
+        print(f"🚀 Запуск {process_name}")
+        sensor = AHT20_BMP280()
+        
+        while True:
+            data = sensor.get_data()
+            if data:
+
+                update_sensor_data(shared_dict, lock, data)
+                update_service_status(shared_dict, lock, process_name,'ОК')
+            
+    except KeyboardInterrupt:
+        print(f"Процесс {process_name} остановлен")
+    except Exception as e:
+        logger.error(f"Критическая ошибка {process_name}: {e}", exc_info=True)
+        update_service_status(shared_dict, lock, process_name, e)
+    finally:
+        if sensor:
+            sensor.close()
 
 
 def main():
