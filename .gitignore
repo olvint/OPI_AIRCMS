@@ -32,3 +32,8 @@ sensors.log
 # System
 .DS_Store
 Thumbs.db
+
+bin/
+include/
+lib/
+test/
