@@ -14,6 +14,7 @@ from sensors import sds011
 from sensors import cpu_temperature
 
 from senders import sensor_community
+from senders import aircms_online
 
 from update_shared_dict import update_service_status
 
@@ -130,7 +131,7 @@ def main():
         )
         processes.append(cputemp_process)
 
-        # Процесс отправки данных
+        # Процесс отправки данных 1
         sensor_community_process = multiprocessing.Process(
             target=sensor_community.send_data,
             args=(shared_dict, lock),
@@ -138,6 +139,17 @@ def main():
             daemon=True
         )
         processes.append(sensor_community_process)
+
+
+        # Процесс отправки данных 2
+        aircms_online_process = multiprocessing.Process(
+            target=aircms_online.send_data,
+            args=(shared_dict, lock),
+            name="aircms_online",
+            daemon=True
+        )
+        processes.append(aircms_online_process)
+
 
 
         
